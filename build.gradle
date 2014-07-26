@@ -99,7 +99,7 @@ project(':') {
 	}
 
 	apply plugin: 'shadow'
-	
+
 	// merge everything into one jar
 	// https://github.com/johnrengelman/shadow
 	shadow {
@@ -130,6 +130,8 @@ subprojects {
 		exclude 'jfxtras/labs/test/JFXtrasGuiTest.class'
 	}
 	
+	apply plugin: 'osgi'
+	
 	configurations {
 		asciidoclet
 	}
@@ -152,6 +154,17 @@ subprojects {
 		from sourceSets.main.allSource
 		classifier = 'sources'
 	}
+	
+	jar {
+		manifest {
+			attributes (\
+				'Bundle-Name': project.name
+			)
+			instruction 'Export-Package',
+				'!jfxtras.internal.*',
+				'jfxtras.*'
+		}
+	}
 
 	artifacts {
 		archives jar
@@ -160,17 +173,51 @@ subprojects {
 	}
 }
 
+
+class CompileCSS extends DefaultTask {
+	@TaskAction
+	def compile() {
+		def src = project.file(new File(project.projectDir, "/src/main/resources"))
+		def tgt = project.file(new File(project.buildDir, "/resources/main"))
+		
+		ant.delete (includeEmptyDirs: 'true', failonerror: 'false') { 
+			fileset(dir: tgt, includes: "**/*.bss") 
+		}
+		
+		project.mkdir tgt
+		project.javaexec {
+			main = "com.sun.javafx.tools.packager.Main"
+			classpath = project.files("${System.properties['java.home']}/../lib/ant-javafx.jar")
+			args = [ "-createbss",
+				"-srcdir", src,
+				"-outdir", tgt
+			]
+		}
+	}
+}
+
 project(':jfxtras-agenda') {
 	dependencies {
 		compile project(':jfxtras-controls')
 		testCompile project(':jfxtras-test-support')
-	}
+	}	
+
+	task compileCSS(type: CompileCSS)
+	processResources.finalizedBy(compileCSS)
 }
 
 project(':jfxtras-common') {
 	dependencies {
 		testCompile project(':jfxtras-test-support')
-	}
+	}	
+}
+
+project(':jfxtras-fxml') {
+}
+
+project(':jfxtras-window') {
+	task compileCSS(type: CompileCSS)
+	processResources.finalizedBy(compileCSS)
 }
 
 project(':jfxtras-controls') {
@@ -179,6 +226,9 @@ project(':jfxtras-controls') {
 		compile project(':jfxtras-fxml')
 		testCompile project(':jfxtras-test-support')
 	}
+	
+	task compileCSS(type: CompileCSS)
+	processResources.finalizedBy(compileCSS)
 }
 
 project(':jfxtras-test-support') {
